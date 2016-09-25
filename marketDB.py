@@ -4,39 +4,108 @@
 
 import psycopg2
 
-
 def connect():
     """Connect to the PostgreSQL database.  Returns a database connection."""
     return psycopg2.connect("dbname=market")
 
+def getCandidateList():
+    """Get a list of all of the candidates in the game database."""
+    DB = connect()
+    c = DB.cursor()
+    c.execute("SELECT candidate_name1 as candidate_name FROM elections UNION SELECT candidate_name2 as candidate_name FROM elections ORDER BY candidate_name;")
+    candidates = c.fetchall()
+    DB.close()
+    return candidates
 
 def addPlayer(username, cash):
     """Add a new player to the game."""
     DB = connect()
     c = DB.cursor()
-    c.execute("insert into players (username) values (%s, %f);", 
+    # The player is added to the database and given $100:
+    c.execute("insert into players values (%s, %f);", 
               (username, cash,))
+    
+    # Give the player a holding in each candidate:
+    candidates = getCandidateList()
+    for candidate in candidates:
+        c.execute("insert into positions (owner, candidate, quantity) values (%d, %d, %d);", (username, candidate, 1,))
+
     DB.commit()
     DB.close()
 
-def addCandidate(candidate):
-    """Add a new candidate to the database."""
+def addElection(election_name, candidate1, candidate2):
+    """Add a new election to the database."""
     DB = connect()
     c = DB.cursor()
-    c.execute("insert into candidates (candidate_name) values (%s);", 
-              (username))
+    c.execute("insert into elections (election_name, candidate1, candidate2) values (%s, %s, %s);", (election_name, candidate1, candidate2,))
     DB.commit()
     DB.close()
 
-def addElection(election_name, candidate_id1, candidate_id2):
-    """Add a new candidate to the database."""
+def showTable(tableName):
+     """Show the results of a given table"""
     DB = connect()
     c = DB.cursor()
-    c.execute("insert into elections (election_name, candidate1, candidate2) values (%s, %d, %d);", 
-              (election_name, candidate_id1, candidate_id2,))
+    c.execute("SELECT * from %s;", (tableName,))
     DB.commit()
     DB.close()
 
+def clearATable(tablename):
+    """Remove all rows from a given table."""
+    DB = connect()
+    c = DB.cursor()
+    c.execute("DELETE from %s;", (tableName,))
+    DB.commit()
+    DB.close()
+
+# This is the most important method.
+
+def placeOrder(player, candidate, order, price, quantity):
+    """
+    Add a new order to the database.
+    0. Get the market price.
+    1. Add new order to database.
+    2. Check if there is a match.
+    3. Determine the size of the possible transaction
+    4. Check if both participants have enough cash for the transaction.
+          - if not, the orders are withdrawn.
+    5. Create a new transaction record
+    6. Delete the smaller order and modify the larger order. 
+    7. change the cash value in both player accounts. 
+    
+    """
+    
+    DB = connect()
+    c = DB.cursor()
+    
+    # Step 0: Get list of offers on the other side of the trade: 
+    if order == "buy":
+        c.execute("SELECT order_id, player, price, quantity, time FROM orders where candidate = %s and order_type = 'sell' ORDER BY price, time", (candidate, other_order))
+    else:
+        c.execute("SELECT order_id, player, price, quantity, time FROM orders where candidate = %s and order_type = 'buy' ORDER BY price DESC, time", (candidate, other_order))
+    offers = c.fetchall()
+    
+    # If the offers list size is zero, then there are no open bids.
+    if len(offers) < 1:
+        
+        # What to do about market price?
+
+        # Try looking up value of last transaction:
+        
+        # Otherwise complain and say impossible...
+
+
+
+    # Step 1: Add the new order into the database:
+    c.execute("insert into orders (player, candidate, order_type, price, quantity) values (%s, %s, %s, %d, %d);", (player, candidate, order, price, quantity))
+    
+    # Then check for matches in the orders, etc.
+
+    # If there is a match, then add a transaction.
+    
+    # Also need to check that players have enough cash for the transaction.
+
+    DB.commit()
+    DB.close()
 
 
 
@@ -55,31 +124,9 @@ def addTransaction(buy_order, sell_order, quantity):
     DB.commit()
     DB.close()
 
-def addPosition(owner_id, candidate_id, quantity):
-    """Add a new position (holding) to the database."""
-    DB = connect()
-    c = DB.cursor()
-    c.execute("insert into positions (owner, candidate, quantity) values (%d, %d, %d);", 
-              (owner_id, candidate_id, quantity,))
-    DB.commit()
-    DB.close()
 
-def addOrder(player_id, candidate_id, order_type, price, quantity):
-    """Add a new order to the database."""
-    DB = connect()
-    c = DB.cursor()
-    c.execute("insert into orders (player, candidate, order_type, price, quantity) values (%d, %d, %s, %d, %d);", 
-              (player_id, candidate_id, order_type, price, quantity))
-    DB.commit()
-    DB.close()
 
-def clearATable(tablename):
-    """Remove all rows from a given table."""
-    DB = connect()
-    c = DB.cursor()
-    c.execute("delete from %s;", (tableName,))
-    DB.commit()
-    DB.close()
+
 
 def deleteOrder(order_id):
     """Remove all rows from a given table."""
@@ -88,106 +135,3 @@ def deleteOrder(order_id):
     c.execute("delete from open_orders where order_id = %d;", (order_id,))
     DB.commit()
     DB.close()
-
-
-
-#################################
-
-def countPlayers():
-    """Returns the number of players currently registered."""
-    DB = connect()
-    c = DB.cursor()
-    c.execute("select count(*) from players;")
-    result = (c.fetchone())[0]
-    DB.close()
-    return result
-
-def registerPlayer(name):
-    """Adds a player to the tournament database.
-  
-    The database assigns a unique serial id number for the player.  (This
-    should be handled by your SQL database schema, not in your Python code.)
-  
-    Args:
-      name: the player's full name (need not be unique).
-    """
-    DB = connect()
-    c = DB.cursor()
-    c.execute("insert into players (player_name) values (%s);", (name,))
-    DB.commit()
-    DB.close()
-
-def playerStandings():
-    """Returns a list of the players and their win records, sorted by wins.
-
-    The first entry in the list should be the player in first place, or a player
-    tied for first place if there is currently a tie.
-
-    Returns:
-      A list of tuples, each of which contains (id, name, wins, matches):
-        id: the player's unique id (assigned by the database)
-        name: the player's full name (as registered)
-        wins: the number of matches the player has won
-        matches: the number of matches the player has played
-    """
-    DB = connect()
-    c = DB.cursor()
-    c.execute("""
-            SELECT players.player_id, players.player_name,
-           (select count(*) from matches
-            where matches.winner_id = players.player_id) as matches_won,
-           (select count(*) from matches
-            where players.player_id in (matches.winner_id, matches.loser_id)) as matches_played
-            FROM players
-            ORDER BY matches_won DESC
-            """)
-    
-    result = c.fetchall()
-    DB.close()
-    return result
-
-    """
-    get wins for each player:
-    select matches.winner_id, count(*) as num from matches group by matches.winner_id
-
-    get total matches for each player:
-    select players.player_id, count(*) as num2 from players left join matches where (players.player_id = matches.winner_id) or (players.player_id = matches.loser_id) group by players.player_id
-    """
-
-    
-
-def reportMatch(winner, loser):
-    """Records the outcome of a single match between two players.
-
-    Args:
-      winner:  the id number of the player who won
-      loser:  the id number of the player who lost
-    """
-    DB = connect()
-    c = DB.cursor()
-    c.execute("insert into matches (winner_id, loser_id) values (%s, %s);", (winner, loser,))
-    DB.commit()
-    DB.close()
-
- 
-def swissPairings():
-    """Returns a list of pairs of players for the next round of a match.
-  
-    Assuming that there are an even number of players registered, each player
-    appears exactly once in the pairings.  Each player is paired with another
-    player with an equal or nearly-equal win record, that is, a player adjacent
-    to him or her in the standings.
-  
-    Returns:
-      A list of tuples, each of which contains (id1, name1, id2, name2)
-        id1: the first player's unique id
-        name1: the first player's name
-        id2: the second player's unique id
-        name2: the second player's name
-    """
-    result = []
-    standings = playerStandings()
-    for index in range(0, len(standings), 2) :
-        result.append([standings[index][0], standings[index][1], standings[index+1][0], standings[index+1][1]])
-
-    return result
