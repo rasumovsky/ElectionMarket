@@ -10,43 +10,66 @@ def connect():
     return psycopg2.connect("dbname=market")
 
 
-def addPlayer(username):
+def addPlayer(username, cash):
     """Add a new player to the game."""
     DB = connect()
     c = DB.cursor()
-    c.execute("insert into players (username) values (%s);", (username,))
+    c.execute("insert into players (username) values (%s, %f);", 
+              (username, cash,))
     DB.commit()
     DB.close()
 
-def addCandidate(candidate, office, odds):
+def addCandidate(candidate):
     """Add a new candidate to the database."""
     DB = connect()
     c = DB.cursor()
-    c.execute("insert into candidates (candidate_name, office, odds) values (%s, %s, %f);", (username, office, odds))
+    c.execute("insert into candidates (candidate_name) values (%s);", 
+              (username))
     DB.commit()
     DB.close()
 
-def addShare(candidate_id, owner_id):
+def addElection(election_name, candidate_id1, candidate_id2):
+    """Add a new candidate to the database."""
+    DB = connect()
+    c = DB.cursor()
+    c.execute("insert into elections (election_name, candidate1, candidate2) values (%s, %d, %d);", 
+              (election_name, candidate_id1, candidate_id2,))
+    DB.commit()
+    DB.close()
+
+
+
+
+#### WAIT, ALL WE NEED TO DO IS MATCH ORDERS...
+def addTransaction(buy_order, sell_order, quantity):
     """Add a new share to the database."""
     DB = connect()
     c = DB.cursor()
-    c.execute("insert into shares (candidate_id, owner_id) values (%d, %d);", (candidate_id, owner_id))
+    c.execute("insert into transactions (buyer, seller, candidate, quantity, price) values (%d, %d, %d, %d, %d);", 
+              (buyer_id, seller_id, candidate_id, quantity, price,))
+
+    # ASLO MODIFY POSITIONS...
+    # buyer should have cash deducted added/modified
+    # seller should have cash added and position removed/modified
+
     DB.commit()
     DB.close()
 
-def addTransaction(buyer_id, seller_id, share_id, price):
-    """Add a new transaction to the database."""
+def addPosition(owner_id, candidate_id, quantity):
+    """Add a new position (holding) to the database."""
     DB = connect()
     c = DB.cursor()
-    c.execute("insert into transactions (buyer_id, seller_id, share_id, price) values (%d, %d, %d, %f);", (buyer_id, seller_id, share_id, price))
+    c.execute("insert into positions (owner, candidate, quantity) values (%d, %d, %d);", 
+              (owner_id, candidate_id, quantity,))
     DB.commit()
     DB.close()
 
-def addOrder(player_id, trade_type, price):
+def addOrder(player_id, candidate_id, order_type, price, quantity):
     """Add a new order to the database."""
     DB = connect()
     c = DB.cursor()
-    c.execute("insert into orders (player_id, trade_type, price) values (%d, %s, %f);", (player_id, trade_type, price))
+    c.execute("insert into orders (player, candidate, order_type, price, quantity) values (%d, %d, %s, %d, %d);", 
+              (player_id, candidate_id, order_type, price, quantity))
     DB.commit()
     DB.close()
 

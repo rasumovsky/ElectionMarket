@@ -1,5 +1,7 @@
-# ElectionMarket
-A market-based game for guessing the outcome of an election.
+# Election Market
+A market-based game for guessing the outcome of an election. The basic preimse
+is summarized in [this](https://en.wikipedia.org/wiki/Election_stock_market) 
+wikipedia article.
 
 ## Game overview
 Players start out with $100 in cash and $100 in the form of shares. During 
@@ -51,3 +53,10 @@ probability that someone will buy your shares is to decrease your asking price.
 Note that in cases where the number of shares for sale is not equal to the 
 number of shares for purchase, only part of the larger transaction will occur. 
 
+## Technical Details
+### Program
+The game is currently under development. An SQL database supports the market
+and player data. PostgreSQL's psycopg2 python module is used for interfacing. 
+
+### Who to blame
+Send complaints or comments to rasumovsky. 
