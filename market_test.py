@@ -30,13 +30,15 @@ if __name__ == ' __main__':
             print "You want to add a player to the game."
             player = raw_input("What is the name of the new player: ")
             addPlayer(player, 200)
-
+        
         # User adds an order:
         elif user_input.find("trade") > 0:
             print "You want to trade some shares."
             order = raw_input("Buy or sell: ")
             candidate = raw_input("Which candidate: ")
             price = raw_input("Specify price or type 'MKT' for market value: ")
+            while ((price <= 0 or price >= 100) and price != "MKT"):
+                price = raw_input("Please specify price between $0 and $100 or 'MKT': ")
             quantity = raw_input("How many shares to trade? ")
             placeOrder(player, candidate, order, price, quantity):
 
