@@ -3,6 +3,7 @@
 # Market Database Interactions
 
 import psycopg2
+from psycopg2.extensions import AsIs
 
 def connect():
     """Connect to the PostgreSQL database.  Returns a database connection."""
@@ -22,13 +23,13 @@ def addPlayer(username, cash):
     DB = connect()
     c = DB.cursor()
     # The player is added to the database and given $100:
-    c.execute("insert into players values (%s, %f);", 
+    c.execute("insert into players values (%s, %s);", 
               (username, cash,))
     
     # Give the player a holding in each candidate:
     candidates = getCandidateList()
     for candidate in candidates:
-        c.execute("INSERT into positions (owner, candidate, quantity) values (%d, %d, %d);", (username, candidate[0], 1,))
+        c.execute("INSERT into positions (owner, candidate, quantity) values (%s, %s, %s);", (username, candidate[0], 1,))
 
     DB.commit()
     DB.close()
@@ -37,7 +38,7 @@ def addElection(election_name, candidate1, candidate2):
     """Add a new election to the database."""
     DB = connect()
     c = DB.cursor()
-    c.execute("INSERT into elections (election_name, candidate1, candidate2) values (%s, %s, %s);", (election_name, candidate1, candidate2,))
+    c.execute("INSERT into elections (election_name, candidate_name1, candidate_name2) values (%s, %s, %s);", (election_name, candidate1, candidate2,))
     DB.commit()
     DB.close()
 
@@ -52,17 +53,20 @@ def printPlayerOrders(player):
         print "ID = ", order[0], " \tCandidate = ", order[2], " \tType = ", order[3], " \tPrice = $", order[4], " \tQuantity = ", order[5], " shares."
     
 def showTable(tableName):
-     """Show the results of a given table"""
+    """Show the results of a given table"""
     DB = connect()
     c = DB.cursor()
-    c.execute("SELECT * from %s;", (tableName,))
+    c.execute("SELECT * from %s;", (AsIs(tableName),))
+    results = c.fetchall()
+    for result in results:
+        print result
     DB.close()
 
-def clearATable(tablename):
+def clearATable(tableName):
     """Remove all rows from a given table."""
     DB = connect()
     c = DB.cursor()
-    c.execute("DELETE from %s;", (tableName,))
+    c.execute("DELETE from %s;", (AsIs(tableName),))
     DB.commit()
     DB.close()
 
@@ -158,7 +162,7 @@ def placeOrder(player, candidate, order, price, quantity):
     matching_orders = getMatchingOrderList(canddate, order)
     
     # Calculate the trade value:
-    trade_value = (price == "MKT") ? market_price * quantity : price * quantity
+    trade_value = market_price * quantity if (price == "MKT") else price * quantity
         
     # Check that buyer can afford to make this trade:
     if order == 'buy' and playerCashValue(player) < trade_value:
@@ -175,9 +179,9 @@ def placeOrder(player, candidate, order, price, quantity):
     c = DB.cursor()
     
     # Set the current transaction price:
-    current_price = (price == "MKT") ? market_price : price
+    current_price = market_price if (price == "MKT") else price
     
-    c.execute("INSERT into orders (player, candidate, order_type, price, quantity) values (%s, %s, %s, %d, %d) RETURNING order_id;", (player, candidate, order, current_price, quantity))
+    c.execute("INSERT into orders (player, candidate, order_type, price, quantity) values (%s, %s, %s, %s, %s) RETURNING order_id;", (player, candidate, order, current_price, quantity))
     current_order_id = c.fetchone()[0]
     print "Your order has been placed on the market."
 
@@ -206,23 +210,23 @@ def placeOrder(player, candidate, order, price, quantity):
 
         ########################################
         # Perform the trade where both people are trading the same candidate:
-        if candidate = best_match[2]:
+        if candidate == best_match[2]:
             
-            buyer = (order == 'buy') ? player : best_match[1]
-            seller = (order == 'sell') ? best_match[1] : player
-            c.execute("INSERT into transactions (buyer, seller, candidate, quantity, price) values (%s, %s, %s, %d, %d);", (buyer, seller, candidate, trade_quantity, trade_price,))
+            buyer = player if (order == 'buy') else best_match[1]
+            seller = best_match[1] if (order == 'sell') else player
+            c.execute("INSERT into transactions (buyer, seller, candidate, quantity, price) values (%s, %s, %s, %s, %s);", (buyer, seller, candidate, trade_quantity, trade_price,))
             
             # Deduct from buyer's cash and add to seller's cash:
-            c.execute("UPDATE players set cash = %d where username = %s",
+            c.execute("UPDATE players set cash = %s where username = %s",
                       ((playerCashValue(buyer) - trade_price), buyer,))
-            c.execute("UPDATE players set cash = %d where username = %s",
+            c.execute("UPDATE players set cash = %s where username = %s",
                       ((playerCashValue(seller) + trade_price), seller,))
         
             # Change the positions of each player:
             position_buyer = getPosition(buyer, candidate) + trade_quantity
             position_seller = getPosition(seller, candidate) - trade_quantity
-            c.execute("UPDATE positions set quantity = %d where owner = %s and candidate = %s", (position_buyer, buyer, candidate,))
-            c.execute("UPDATE positions set quantity = %d where owner = %s and candidate = %s", (position_seller, seller, candidate,))
+            c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s", (position_buyer, buyer, candidate,))
+            c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s", (position_seller, seller, candidate,))
             
         ########################################
         # Players have executed the same order but on opposing candidates,
@@ -236,51 +240,51 @@ def placeOrder(player, candidate, order, price, quantity):
             # Two buyers. Add transactions, positions, and deduct cash holdings:
             if order == 'buy':
                 # First customer:
-                c.execute("INSERT into transactions(buyer, seller, candidate, quantity, price) values (%s, 'Master', %s, %d, %d);", (player, candidate, trade_quantity, trade_price,))
-                c.execute("UPDATE players set cash=%d where username=%s", ((playerCashValue(player) - trade_price), player,))
+                c.execute("INSERT into transactions(buyer, seller, candidate, quantity, price) values (%s, 'Master', %s, %s, %s);", (player, candidate, trade_quantity, trade_price,))
+                c.execute("UPDATE players set cash=%s where username=%s", ((playerCashValue(player) - trade_price), player,))
                 pos1 = getPosition(player, candidate) + trade_quantity
-                c.execute("UPDATE positions set quantity = %d where owner = %s and candidate = %s", (pos1, player, candidate,))
+                c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s", (pos1, player, candidate,))
                 
                 # Second customer:
-                c.execute("INSERT into transactions(buyer, seller, candidate, quantity, price) values (%s, 'Master', %s, %d, %d);", (best_match[1], opponent, trade_quantity, trade_price,))
-                c.execute("UPDATE players set cash=%d where username=%s", ((playerCashValue(best_match[1]) - trade_price), best_match[1],))
+                c.execute("INSERT into transactions(buyer, seller, candidate, quantity, price) values (%s, 'Master', %s, %s, %s);", (best_match[1], opponent, trade_quantity, trade_price,))
+                c.execute("UPDATE players set cash=%s where username=%s", ((playerCashValue(best_match[1]) - trade_price), best_match[1],))
                 pos2 = getPosition(best_match[1], opponent) + trade_quantity
-                c.execute("UPDATE positions set quantity = %d where owner = %s and candidate = %s", (pos2, best_match[1], opponent,))
+                c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s", (pos2, best_match[1], opponent,))
 
             # Two sellers. Add transaction, cash, and deduct positions:
             else:
                 # First customer:
-                c.execute("INSERT into transactions(buyer, seller, candidate, quantity, price) values ('Master', %s, %s, %d, %d);", (player, candidate, trade_quantity, trade_price,))
-                c.execute("UPDATE players set cash=%d where username=%s", ((playerCashValue(player) + trade_price), player,))
+                c.execute("INSERT into transactions(buyer, seller, candidate, quantity, price) values ('Master', %s, %s, %s, %s);", (player, candidate, trade_quantity, trade_price,))
+                c.execute("UPDATE players set cash=%s where username=%s", ((playerCashValue(player) + trade_price), player,))
                 pos1 = getPosition(player, candidate) - trade_quantity
-                c.execute("UPDATE positions set quantity = %d where owner = %s and candidate = %s", (pos1, player, candidate,))
+                c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s", (pos1, player, candidate,))
                 
                 
-                c.execute("INSERT into transactions(buyer, seller, candidate, quantity, price) values ('Master', %s, %s, %d, %d);", (best_match[1], opponent, trade_quantity, trade_price,))
-                c.execute("UPDATE players set cash=%d where username=%s", ((playerCashValue(best_match[1]) + trade_price), best_match[1],))
+                c.execute("INSERT into transactions(buyer, seller, candidate, quantity, price) values ('Master', %s, %s, %s, %s);", (best_match[1], opponent, trade_quantity, trade_price,))
+                c.execute("UPDATE players set cash=%s where username=%s", ((playerCashValue(best_match[1]) + trade_price), best_match[1],))
                 pos2 = getPosition(best_match[1], opponent) - trade_quantity
-                c.execute("UPDATE positions set quantity = %d where owner = %s and candidate = %s", (pos2, best_match[2], opponent,))
+                c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s", (pos2, best_match[2], opponent,))
 
         # Then delete or modify the orders:
         if quantity < best_match[5]:
             # delete the current bid and modify the matched bid size
-            c.execute("DELETE from orders where order_id = %d", 
+            c.execute("DELETE from orders where order_id = %s", 
                       (current_order_id,))
-            c.execute("UPDATE orders set quantity = %d where order_id = %d",
+            c.execute("UPDATE orders set quantity = %s where order_id = %s",
                       ((best_match[5] - quantity), best_match[0],))
         elif quantity > best_match[5]:
             # delete the matched offer and only modify current offer
-            c.execute("DELETE from orders where order_id = %d", 
+            c.execute("DELETE from orders where order_id = %s", 
                       (best_match[0],))
-            c.execute("DELETE from orders where order_id = %d", 
+            c.execute("DELETE from orders where order_id = %s", 
                       (current_order_id,))
             incomplete_order = True
             incomplete_quantity = quantity - best_match[5]
         else:
             # delete both offers (perfect match)
-            c.execute("DELETE from orders where order_id = %d", 
+            c.execute("DELETE from orders where order_id = %s", 
                       (current_order_id,))
-            c.execute("DELETE from orders where order_id = %d",
+            c.execute("DELETE from orders where order_id = %s",
                       (best_match[0],))
                 
     else:
@@ -297,6 +301,10 @@ def deleteOrder(order_id):
     """Remove an order that was placed."""
     DB = connect()
     c = DB.cursor()
-    c.execute("DELETE from orders where order_id = %d;", (order_id,))
+    c.execute("DELETE from orders where order_id = %s;", (order_id,))
     DB.commit()
     DB.close()
+
+def getPlayerStandings():
+    """Rank the players using cash + market prices of all assets."""
+    print "Needs to be defined..."
