@@ -5,16 +5,9 @@
 from marketDB import *
 
 def getPlayerPrice():
-    current_price = raw_input("Specify price from $0 to $100 or 'MKT': ")
-    if int(current_price) > 0 and int(current_price) < 100:
-        print "current_price1 = ", current_price
-        return current_price
-    elif str(current_price) == 'MKT':
-        print "current_price2 = ", current_price
-        return current_price
-    else: 
-        print "current_price3 = ", current_price
-        return getPlayerPrice()
+    current_price = int(raw_input("Specify price from $0 to $100 or 'MKT': "))
+    if current_price > 0 and current_price < 100: return current_price
+    else: return getPlayerPrice()
 
 def playTheGame():
     print "Welcome to the game!"
@@ -53,38 +46,41 @@ def playTheGame():
         # User adds an order:
         elif "trade" in user_input:
             print "You want to trade some shares."
-            order = raw_input("'buy' or 'sell': ")
+            order = raw_input("buy or sell: ")
             candidate = raw_input("Which candidate: ")
-            price = getPlayerPrice()
-
-            quantity = raw_input("How many shares to trade? ")
-            placeOrder(player, candidate, order, price, quantity)
-        
+            market_or_custom = raw_input("Trade at market price (market) or custom price (custom): ")
+            atMarketPrice = True if market_or_custom == "market" else False
+            price = 101 if atMarketPrice else getPlayerPrice()
+            quantity = int(raw_input("How many shares to trade? "))
+            placeOrder(player, candidate, order, price, quantity, atMarketPrice)
+            
         # Delete an order:
         elif "delete order" in user_input:
             print "You want to delete one of your trade orders."
             printPlayerOrders(player)
-            order_id = raw_input("What is the order ID (see list above): ")
+            order_id = int(raw_input("What is the order ID (see list above): "))
             deleteOrder(order_id)
-        
+            
         # Get information about the game:
         elif "show" in user_input:
-            if user_input.find("players") > 0: showTable("players")
-            elif user_input.find("orders") > 0: showTable("orders")
-            elif user_input.find("elections") > 0: showTable("elections")
+            if "players" in user_input: showTable("players")
+            elif "orders" in user_input: showTable("orders")
+            elif "elections" in user_input: showTable("elections")
+            elif "positions" in user_input: showTable("positions")
+            elif "transactions" in user_input: showTable("transactions")
             else: print "I'm not sure what to show you."
 
         # Get information about the game:
         elif "clear table" in user_input:
-            if user_input.find("players") > 0: clearATable("players")
-            elif user_input.find("orders") > 0: clearATable("orders")
-            elif user_input.find("elections") > 0: clearATable("elections")
+            if "players" in user_input: clearATable("players")
+            elif "orders" in user_input: clearATable("orders")
+            elif "elections" in user_input: clearATable("elections")
             else: print "I'm not sure what to show you."
-
+            
         # Get ranking:
         elif "ranking" in user_input:
             getPlayerStandings();
-        
+            
         # Get list of commands:
         elif "help" in user_input:
             print "A list of commands. Each will prompt for additional inputs."

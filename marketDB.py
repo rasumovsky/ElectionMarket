@@ -45,7 +45,7 @@ def addElection(election_name, candidate1, candidate2):
 def printPlayerOrders(player):
     DB = connect()
     c = DB.cursor()
-    c.execute("SELECT * from orders where player = %s ORDER BY time DESC",
+    c.execute("SELECT * from orders where player = %s ORDER BY time DESC;",
               (player,))
     order_list = c.fetchall()
     DB.close()
@@ -74,42 +74,43 @@ def getOpponent(candidate):
     """Retrieves the opposing candidate in an election"""
     DB = connect()
     c = DB.cursor()
-    c.execute("SELECT candidate_name1 as candidate FROM elections where candidate_name2 = %s UNION SELECT candidate_name2 as candidate FROM elections where candidate_name1 = %s", (candidate, candidate,))
-    oppnent_name = c.fetchone()[0]
+    c.execute("SELECT candidate_name1 as candidate FROM elections where candidate_name2 = %s UNION SELECT candidate_name2 as candidate FROM elections where candidate_name1 = %s;", (candidate, candidate,))
+    opponent_name = c.fetchone()[0]
     DB.close()
     return opponent_name
 
 def getPosition(player, candidate):
     DB = connect()
     c = DB.cursor()
-    c.execute("SELECT quantity from positions where owner = %s and candidate = %s limit 1", (player,candidate,));
-    position_size = c.fetchone()
+    c.execute("SELECT quantity from positions where owner = %s and candidate = %s limit 1;", (player,candidate,));
+    position_size = c.fetchone()[0]
     DB.close()
-    return position_size
+    return int(position_size)
 
 def playerCashValue(player): 
     DB = connect()
     c = DB.cursor()
-    c.execute("SELECT cash from players where username = %s limit 1",(player,));
+    c.execute("SELECT cash from players where username = %s limit 1;",
+              (player,));
     cash_value = c.fetchone()
     DB.close()
-    return cash_value[0]
+    return int(cash_value[0])
 
 def getLastPrice(candidate):
     """Use transaction history to get last price of a share"""
     opponent = getOpponent(candidate)
     DB = connect()
     c = DB.cursor()
-    c.execute("SELECT price FROM transactions where (candidate = %s) or (candidate = %s) ORDER BY time DESC limit 1", (candidate, opponent,))
+    c.execute("SELECT price FROM transactions where (candidate = %s) or (candidate = %s) ORDER BY time DESC limit 1;", (candidate, opponent,))
     history = c.fetchall()
     DB.close()
     if len(history) > 0:
-        return history[0][0]
+        return int(history[0][0])
     else:
         # The default price will be 50/50 at the game beginning:
         return 50
     
-def getMatchingOrderList(canddate, order):
+def getMatchingOrderList(candidate, order):
     """ Get most highly ranked buy or sell orders"""
     opponent = getOpponent(candidate)
     DB = connect()
@@ -117,10 +118,10 @@ def getMatchingOrderList(canddate, order):
     # Get list of offers on the other side of the trade: 
     if order == "buy":
         # rank seller asking prices from lower to highest and time:
-        c.execute("SELECT * FROM orders where (candidate = %s and order_type = 'sell') or (candidate = %s and order_type = 'buy') ORDER BY price, time", (candidate, opponent,))
+        c.execute("SELECT * FROM orders where (candidate = %s and order_type = 'sell') or (candidate = %s and order_type = 'buy') ORDER BY price, time;", (candidate, opponent,))
     else:
         # rank buyer bidding prices from highest to lowest, and time:
-        c.execute("SELECT * FROM orders where (candidate = %s and order_type = 'buy') or (candidate = %s and order_type = 'sell') ORDER BY price DESC, time", (candidate, opponent,))
+        c.execute("SELECT * FROM orders where (candidate = %s and order_type = 'buy') or (candidate = %s and order_type = 'sell') ORDER BY price DESC, time;", (candidate, opponent,))
     orderList = c.fetchall()
     DB.close()
     return orderList
@@ -130,14 +131,14 @@ def getMarketPrice(candidate, order):
     # Get a list of orders:
     matching_orders = getMatchingOrderList(candidate, order)
     # Then return the best order price:
-    if len(offers) > 0:
+    if len(matching_orders) > 0:
         return matching_orders[0][2]
     else:
         return getLastPrice(candidate)
     
 # This is the most important method.
 
-def placeOrder(player, candidate, order, price, quantity):
+def placeOrder(player, candidate, order, price, quantity, useMarketPrice):
     """
     Adding a new order to the database involves the following steps:
     0. Get the market price and historical asset price
@@ -159,10 +160,10 @@ def placeOrder(player, candidate, order, price, quantity):
     # Step 0: Get prices and potential matches for the trade:
     market_price = getMarketPrice(candidate, order)
     historical_price = getLastPrice(candidate)
-    matching_orders = getMatchingOrderList(canddate, order)
+    matching_orders = getMatchingOrderList(candidate, order)
     
     # Calculate the trade value:
-    trade_value = market_price * quantity if (price == "MKT") else price * quantity
+    trade_value = (int(market_price) * int(quantity)) if useMarketPrice else (int(price) * int(quantity))
         
     # Check that buyer can afford to make this trade:
     if order == 'buy' and playerCashValue(player) < trade_value:
@@ -179,7 +180,7 @@ def placeOrder(player, candidate, order, price, quantity):
     c = DB.cursor()
     
     # Set the current transaction price:
-    current_price = market_price if (price == "MKT") else price
+    current_price = market_price if useMarketPrice else price
     
     c.execute("INSERT into orders (player, candidate, order_type, price, quantity) values (%s, %s, %s, %s, %s) RETURNING order_id;", (player, candidate, order, current_price, quantity))
     current_order_id = c.fetchone()[0]
@@ -189,6 +190,8 @@ def placeOrder(player, candidate, order, price, quantity):
     if len(matching_orders) < 1:
         # There are no orders on the other side of the bet.
         print "No matches for the current order were found."
+        DB.commit()
+        DB.close()
         return
     
     # There is at least one order on the other side of the bet.
@@ -202,11 +205,9 @@ def placeOrder(player, candidate, order, price, quantity):
         order_matched = True
 
         # split the difference when both bids are too generous:
-        trade_price = int(0.5 * (current_price + best_match[4]))
+        trade_price = int(0.5 * (int(current_price) + int(best_match[4])))
         # Select the purchase quantity (minimum of the two orders):
-        trade_quantity = min(quantity, best_match[5])
-
-
+        trade_quantity = min(int(quantity), int(best_match[5]))
 
         ########################################
         # Perform the trade where both people are trading the same candidate:
@@ -215,18 +216,18 @@ def placeOrder(player, candidate, order, price, quantity):
             buyer = player if (order == 'buy') else best_match[1]
             seller = best_match[1] if (order == 'sell') else player
             c.execute("INSERT into transactions (buyer, seller, candidate, quantity, price) values (%s, %s, %s, %s, %s);", (buyer, seller, candidate, trade_quantity, trade_price,))
-            
+
             # Deduct from buyer's cash and add to seller's cash:
-            c.execute("UPDATE players set cash = %s where username = %s",
+            c.execute("UPDATE players set cash = %s where username = %s;",
                       ((playerCashValue(buyer) - trade_price), buyer,))
-            c.execute("UPDATE players set cash = %s where username = %s",
+            c.execute("UPDATE players set cash = %s where username = %s;",
                       ((playerCashValue(seller) + trade_price), seller,))
-        
+
             # Change the positions of each player:
             position_buyer = getPosition(buyer, candidate) + trade_quantity
             position_seller = getPosition(seller, candidate) - trade_quantity
-            c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s", (position_buyer, buyer, candidate,))
-            c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s", (position_seller, seller, candidate,))
+            c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s;", (position_buyer, buyer, candidate,))
+            c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s;", (position_seller, seller, candidate,))
             
         ########################################
         # Players have executed the same order but on opposing candidates,
@@ -241,52 +242,53 @@ def placeOrder(player, candidate, order, price, quantity):
             if order == 'buy':
                 # First customer:
                 c.execute("INSERT into transactions(buyer, seller, candidate, quantity, price) values (%s, 'Master', %s, %s, %s);", (player, candidate, trade_quantity, trade_price,))
-                c.execute("UPDATE players set cash=%s where username=%s", ((playerCashValue(player) - trade_price), player,))
+                c.execute("UPDATE players set cash=%s where username=%s;", ((playerCashValue(player) - trade_price), player,))
                 pos1 = getPosition(player, candidate) + trade_quantity
-                c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s", (pos1, player, candidate,))
+                c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s;", (pos1, player, candidate,))
                 
                 # Second customer:
                 c.execute("INSERT into transactions(buyer, seller, candidate, quantity, price) values (%s, 'Master', %s, %s, %s);", (best_match[1], opponent, trade_quantity, trade_price,))
-                c.execute("UPDATE players set cash=%s where username=%s", ((playerCashValue(best_match[1]) - trade_price), best_match[1],))
+                c.execute("UPDATE players set cash=%s where username=%s;", ((playerCashValue(best_match[1]) - trade_price), best_match[1],))
                 pos2 = getPosition(best_match[1], opponent) + trade_quantity
-                c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s", (pos2, best_match[1], opponent,))
+                c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s;", (pos2, best_match[1], opponent,))
 
             # Two sellers. Add transaction, cash, and deduct positions:
             else:
                 # First customer:
                 c.execute("INSERT into transactions(buyer, seller, candidate, quantity, price) values ('Master', %s, %s, %s, %s);", (player, candidate, trade_quantity, trade_price,))
-                c.execute("UPDATE players set cash=%s where username=%s", ((playerCashValue(player) + trade_price), player,))
+                c.execute("UPDATE players set cash=%s where username=%s;", ((playerCashValue(player) + trade_price), player,))
                 pos1 = getPosition(player, candidate) - trade_quantity
-                c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s", (pos1, player, candidate,))
-                
-                
+                c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s;", (pos1, player, candidate,))
+
+                # Second customer:
                 c.execute("INSERT into transactions(buyer, seller, candidate, quantity, price) values ('Master', %s, %s, %s, %s);", (best_match[1], opponent, trade_quantity, trade_price,))
-                c.execute("UPDATE players set cash=%s where username=%s", ((playerCashValue(best_match[1]) + trade_price), best_match[1],))
+                c.execute("UPDATE players set cash=%s where username=%s;", ((playerCashValue(best_match[1]) + trade_price), best_match[1],))
                 pos2 = getPosition(best_match[1], opponent) - trade_quantity
-                c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s", (pos2, best_match[2], opponent,))
+                c.execute("UPDATE positions set quantity = %s where owner = %s and candidate = %s;", (pos2, best_match[2], opponent,))
+
 
         # Then delete or modify the orders:
         if quantity < best_match[5]:
             # delete the current bid and modify the matched bid size
-            c.execute("DELETE from orders where order_id = %s", 
+            c.execute("DELETE from orders where order_id = %s;", 
                       (current_order_id,))
-            c.execute("UPDATE orders set quantity = %s where order_id = %s",
+            c.execute("UPDATE orders set quantity = %s where order_id = %s;",
                       ((best_match[5] - quantity), best_match[0],))
+
         elif quantity > best_match[5]:
             # delete the matched offer and only modify current offer
-            c.execute("DELETE from orders where order_id = %s", 
+            c.execute("DELETE from orders where order_id = %s;", 
                       (best_match[0],))
-            c.execute("DELETE from orders where order_id = %s", 
+            c.execute("DELETE from orders where order_id = %s;", 
                       (current_order_id,))
             incomplete_order = True
             incomplete_quantity = quantity - best_match[5]
         else:
             # delete both offers (perfect match)
-            c.execute("DELETE from orders where order_id = %s", 
+            c.execute("DELETE from orders where order_id = %s;", 
                       (current_order_id,))
-            c.execute("DELETE from orders where order_id = %s",
+            c.execute("DELETE from orders where order_id = %s;",
                       (best_match[0],))
-                
     else:
         print "Other market orders do not match your price at the moment"
     
@@ -295,7 +297,8 @@ def placeOrder(player, candidate, order, price, quantity):
 
     # Then submit a new order:
     if incomplete_order:
-        placeOrder(player, candidate, order, price, incomplete_quantity)
+        placeOrder(player, candidate, order, price, incomplete_quantity,
+                   useMarketPrice)
 
 def deleteOrder(order_id):
     """Remove an order that was placed."""
