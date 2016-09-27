@@ -214,7 +214,8 @@ def placeOrder(player, candidate, order, price, quantity, useMarketPrice):
         if candidate == best_match[2]:
             
             buyer = player if (order == 'buy') else best_match[1]
-            seller = best_match[1] if (order == 'sell') else player
+            #seller = best_match[1] if (order == 'sell') else player
+            seller = player if (order == 'sell') else best_match[1]
             c.execute("INSERT into transactions (buyer, seller, candidate, quantity, price) values (%s, %s, %s, %s, %s);", (buyer, seller, candidate, trade_quantity, trade_price,))
 
             # Deduct from buyer's cash and add to seller's cash:
