@@ -293,10 +293,11 @@ def placeOrder(player, candidate, order, price, quantity, useMarketPrice):
     else:
         print "Other market orders do not match your price at the moment"
     
+    # Commit changes to the database:
     DB.commit()
     DB.close()
 
-    # Then submit a new order:
+    # Submit new (smaller) order if current order was only partially filled:
     if incomplete_order:
         placeOrder(player, candidate, order, price, incomplete_quantity,
                    useMarketPrice)
