@@ -1,16 +1,17 @@
 # Election Market
-A market-based game for guessing the outcome of an election. The basic preimse
+A market-based game for predicting the outcome of an election. The basic premise
 is summarized in [this](https://en.wikipedia.org/wiki/Election_stock_market) 
 wikipedia article.
 
 ## Game overview
 Players start out with $100 in cash and $100 in the form of shares. During 
-gameplay, players buy and sell shares in candidates for the purpose of 
-maximizing their net worth. 
+gameplay, players try to maximize their net worth through buying and selling 
+shares in the candidates.
 
 ### Winning the game
-After the election is held and share valuations are made, player rankings are
-determined by net worth. The highest net-worth player is the winner.
+Following election day, shares of winning candidates are valued at $100 while
+shares of losing candidates are valued at $0. Players are cashed out and then 
+ranked according to net worth. The wealthiest player is the winner.
 
 ### Shares in candidates
 Each share has a price range of $0-$100. During the game, and prior to the 
@@ -50,7 +51,7 @@ someone in the market willing to buy your shares. One way to increase the
 probability that someone will buy your shares is to decrease your asking price.
 
 #### Partial transactions:
-Note that in cases where the number of shares for sale is not equal to the 
+Note that, in cases where the number of shares for sale is not equal to the 
 number of shares for purchase, only part of the larger transaction will occur. 
 
 ## Technical Details
